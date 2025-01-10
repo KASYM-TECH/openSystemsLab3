@@ -1,5 +1,7 @@
 package tim.labs.labs.service;
 
+import org.springframework.dao.InvalidDataAccessResourceUsageException;
+import org.springframework.transaction.annotation.Isolation;
 import tim.labs.labs.database.entity.*;
 import tim.labs.labs.database.entity.enums.Role;
 import tim.labs.labs.database.repository.ImportHistoryRepository;
@@ -33,9 +35,8 @@ public class ImportHistoryService {
 
     private IJwtService jwtService;
 
-    @Transactional
-    public ImportHistory createImportHistory(String token, String entityType, MultipartFile multipartFile) {
-        var ih = new ImportHistory();
+    @Transactional(isolation = Isolation.SERIALIZABLE, rollbackFor = Throwable.class)
+    public ImportHistory createImportHistory(String token, String entityType, MultipartFile multipartFile, ImportHistory ih) throws Exception {
         ih.setUserId(jwtService.getUserIdFromToken(token));
         ih.setStatus("SUCCESS");
         ih.setAddedObjects(0);
@@ -43,11 +44,16 @@ public class ImportHistoryService {
 
         var fileName = multipartFile.getName() + "_" + ih.getId();
         ih.setS3FileName(fileName);
-        ih = ihRepository.save(ih);
 
         try {
             ih = createImportHistoryInternal(token, entityType, multipartFile, ih);
-        } catch (ConnectException e) {
+        }
+        catch (InvalidDataAccessResourceUsageException e) {
+            ih.setAddedObjects(0);
+            ih.setStatus("FAILED");
+            ih.setReasonFailed("Db failure");
+        }
+        catch (ConnectException e) {
             ih.setAddedObjects(0);
             ih.setStatus("FAILED");
             ih.setReasonFailed("Error saving the file to s3");
@@ -55,16 +61,20 @@ public class ImportHistoryService {
             ih.setAddedObjects(0);
             ih.setStatus("FAILED");
             ih.setReasonFailed("Internal error");
-        } catch (Exception e) {
+        }
+        catch (Exception e) {
             ih.setAddedObjects(0);
             ih.setStatus("FAILED");
             ih.setReasonFailed("Unknown error");
         }
-        ihRepository.save(ih);
+
+        if(Objects.equals(ih.getStatus(), "FAILED")) {
+            throw new Exception();
+        }
+
         return ih;
     }
 
-    @Transactional
     public ImportHistory createImportHistoryInternal(String token, String entityType, MultipartFile multipartFile, ImportHistory ih) throws Exception {
         switch (entityType) {
             case "movie":
@@ -105,9 +115,9 @@ public class ImportHistoryService {
                 break;
         }
 
-//        if(3 > 2) {
-//            throw new RuntimeException("ops");
-//        }
+        if(2 > 1) {
+            throw new Exception();
+        }
 
         if(ih.getAddedObjects() == -1) {
             ih.setStatus("FAILED");

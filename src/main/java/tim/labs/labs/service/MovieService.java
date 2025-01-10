@@ -220,7 +220,7 @@ public class MovieService {
          return movieRepository.zeroOscarCountByGenre(genre.toString());
     }
 
-    @Transactional(isolation = Isolation.SERIALIZABLE)
+    @Transactional(isolation = Isolation.SERIALIZABLE, rollbackFor = Throwable.class)
     public int insertMovies(List<Movie> moviesList) {
         try {
             var count = 0;

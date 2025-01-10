@@ -1,6 +1,7 @@
 package tim.labs.labs.controller;
 
 import tim.labs.labs.database.entity.ImportHistory;
+import tim.labs.labs.database.repository.ImportHistoryRepository;
 import tim.labs.labs.security.jwt.service.IJwtService;
 import tim.labs.labs.service.ImportHistoryService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
@@ -18,6 +20,7 @@ import java.util.Objects;
 public class ImportHistoryController {
     private ImportHistoryService importHistoryService;
     private WebSocketController webSocketController;
+    private ImportHistoryRepository importHistoryRepository;
     private IJwtService jwtService;
 
     @GetMapping()
@@ -31,7 +34,20 @@ public class ImportHistoryController {
 
     @PostMapping()
     public ResponseEntity<ImportHistory> create(@RequestParam("file") MultipartFile file, @RequestParam(value = "entity", defaultValue = "0") String entityType, HttpServletRequest request) {
-        var ih = importHistoryService.createImportHistory(request.getHeader("Authorization"), entityType, file);
+        var ih = new ImportHistory();
+        ImportHistory ret = new ImportHistory();
+        try {
+            importHistoryService.createImportHistory(request.getHeader("Authorization"), entityType, file, ret);
+        } catch (Exception e) {
+        }
+        var userId = jwtService.getUserIdFromToken(request.getHeader("Authorization"));
+        ih.setStatus(ret.getStatus());
+        ih.setReasonFailed(ret.getReasonFailed());
+        ih.setTimestamp(LocalDateTime.now());
+        ih.setAddedObjects(ret.getAddedObjects());
+        ih.setUserId(userId);
+
+        importHistoryRepository.save(ih);
         var created = ResponseEntity.ok(ih);
         webSocketController.update("");
         if(Objects.equals(ih.getStatus(), "FAILED")) {
